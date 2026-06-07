@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Animador de Materia Oscura</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="header">
+  <h1><em>✦</em> Animador de <span>Materia Oscura</span></h1>
+  <input type="file" id="file-in" accept=".json" style="display:none">
+  <button class="btn" onclick="document.getElementById('file-in').click()">📂 Cargar</button>
+  <button class="btn accent" onclick="saveJSON()">💾 Guardar</button>
+  <button class="btn small" onclick="undo()" title="Deshacer (Ctrl+Z)">↩</button>
+  <button class="btn small" onclick="redo()" title="Rehacer (Ctrl+Mayús+Z)">↪</button>
+  <button class="btn small" onclick="toggleHelp()" title="Ayuda (?)">?</button>
+  <span class="header-hint">
+    Rueda=zoom · Mmedio=pan · ←→=FC · K=añadir FC · Esc=deselec · ?=ayuda
+  </span>
+</div>
+
+<div id="main">
+  <div id="canvas-wrap"><canvas id="c"></canvas></div>
+
+  <div id="right-panel">
+    <div id="right-tabs">
+      <button class="tab-btn active" data-tab="inspector">Inspector</button>
+      <button class="tab-btn" data-tab="tree">Árbol</button>
+      <button class="tab-btn" data-tab="bones">Huesos</button>
+    </div>
+
+    <div id="tab-inspector" class="tab-content active">
+      <div id="no-sel" class="no-sel">Haz clic en un hueso para seleccionarlo.</div>
+      <div id="bone-fields" style="display:none;flex-direction:column;gap:5px">
+        <div id="angle-vis"><div id="angle-needle"></div></div>
+        <div class="field"><label>Hueso</label><input id="b-name" type="text" readonly></div>
+        <div class="field"><label>Ángulo Local (°)</label><input id="b-angle" type="number" step="0.5"></div>
+        <div id="root-f" style="display:none;flex-direction:column;gap:4px">
+          <div class="field"><label>Offset X de Raíz</label><input id="b-rx" type="number" step="0.5"></div>
+          <div class="field"><label>Offset Y de Raíz</label><input id="b-ry" type="number" step="0.5"></div>
+        </div>
+        <div class="row"><button class="btn accent small" onclick="applyToKF()">✅ Aplicar al FC</button></div>
+        <div class="sep"></div>
+        <h2>Rig</h2>
+        <div class="field"><label>Longitud (px)</label><input id="b-len" type="number" min="0" step="1"></div>
+        <div class="row">
+          <button class="btn small" onclick="applyRig()">Aplicar Longitud</button>
+          <button class="btn small" onclick="copyPose()" title="Copiar pose del FC actual">📋 Copiar Pose</button>
+          <button class="btn small" onclick="pastePose()" title="Pegar pose en el FC actual">📌 Pegar Pose</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-tree" class="tab-content"><div id="tree-root"></div></div>
+
+    <div id="tab-bones" class="tab-content">
+      <h2>Añadir Hueso</h2>
+      <div class="field"><label>Nombre</label><input id="nb-name" placeholder="p.ej. oreja_i"></div>
+      <div class="field"><label>Padre</label><select id="nb-parent"></select></div>
+      <div class="field"><label>Longitud</label><input id="nb-len" type="number" value="10" min="0"></div>
+      <div class="row">
+        <button class="btn small accent" onclick="addBone()">+ Añadir</button>
+        <button class="btn small danger" onclick="deleteBone()">🗑 Eliminar Sel.</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tl-bar-wrap">
+    <div class="row">
+      <strong class="text-small fw-700" style="color:var(--text2)">Línea de Tiempo</strong>
+      <span id="frame-disp">FC: 0 / 60</span>
+      <button class="btn small" onclick="addKF()">+ FC</button>
+      <button class="btn small danger" onclick="delKF()">🗑 FC</button>
+      <button class="btn small" id="btn-play" onclick="togglePlay()">▶</button>
+      <div style="flex:1"></div>
+      <button class="btn small" onclick="prevKF()" title="FC anterior">◀</button>
+      <button class="btn small" onclick="nextKF()" title="FC siguiente">▶</button>
+    </div>
+    <div id="tl-bar">
+      <div id="tl-prog"></div>
+      <div id="tl-kfs"></div>
+      <div id="tl-head"></div>
+    </div>
+    <div id="onion-opts">
+      <label><input type="checkbox" id="onion-prev" checked> Anterior</label>
+      <label><input type="checkbox" id="onion-next"> Siguiente</label>
+      <label>Opacidad <input type="range" id="onion-alpha" min="5" max="40" value="20" style="width:50px"></label>
+    </div>
+  </div>
+
+  <div id="anim-bar">
+    <h2>Animaciones</h2>
+    <div class="field"><label>Activa</label>
+      <select id="sel-anim" onchange="switchAnim()"></select></div>
+    <div class="row">
+      <button class="btn small accent" onclick="newAnim()">+ Nueva</button>
+      <button class="btn small danger" onclick="delAnim()">🗑 Eliminar</button>
+    </div>
+    <div class="sep" style="margin:2px 0"></div>
+    <div class="field"><label>Duración (fotogramas)</label>
+      <input id="a-len" type="number" min="1" value="60" onchange="applyAnimMeta()"></div>
+    <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="checkbox" id="a-loop" onchange="applyAnimMeta()" checked> Bucle
+    </label>
+    <div class="sep" style="margin:2px 0"></div>
+    <div class="text-small text-muted" style="line-height:1.4">
+      Las poses entre FC se interpolarán automáticamente.<br>
+      Exporta JSON → colócalo en <code>datafiles/</code>
+    </div>
+  </div>
+</div>
+
+<div id="ctx-menu"></div>
+<div id="toast"></div>
+
+<div id="help-overlay" onclick="if(event.target===this)toggleHelp()">
+  <div id="help-box">
+    <h2>✦ Atajos de Teclado</h2>
+    <div class="hk"><kbd>Espacio</kbd><span>Reproducir / Pausar</span></div>
+    <div class="hk"><kbd>←</kbd><kbd>→</kbd><span>Fotograma anterior / siguiente</span></div>
+    <div class="hk"><kbd>↑</kbd><kbd>↓</kbd><span>+1° / -1° (hueso selec.)</span></div>
+    <div class="hk"><kbd>K</kbd><span>Añadir fotograma clave</span></div>
+    <div class="hk"><kbd>D</kbd><span>Eliminar fotograma clave</span></div>
+    <div class="hk"><kbd>Esc</kbd><span>Deseleccionar hueso</span></div>
+    <div class="hk"><kbd>Ctrl+Z</kbd><span>Deshacer</span></div>
+    <div class="hk"><kbd>Ctrl+Mayús+Z</kbd><span>Rehacer</span></div>
+    <div class="hk"><kbd>Ctrl+C</kbd><span>Copiar pose del FC actual</span></div>
+    <div class="hk"><kbd>Ctrl+V</kbd><span>Pegar pose en el FC actual</span></div>
+    <div class="hk"><kbd>Rueda</kbd><span>Zoom (con Ctrl) / rotación (sin Ctrl)</span></div>
+    <div class="hk"><kbd>Click Medio</kbd><span>Desplazar vista (pan)</span></div>
+    <div class="hk"><kbd>Arrastrar</kbd><span>Mover extremo del hueso</span></div>
+    <div class="hk"><kbd>Arrastrar FC</kbd><span>Mover fotograma clave</span></div>
+    <div class="hk"><kbd>CliC Derecho</kbd><span>Menú contextual</span></div>
+    <div class="hk"><kbd>S</kbd><span>Guardar JSON</span></div>
+    <div class="hk"><kbd>?</kbd><span>Esta ayuda</span></div>
+    <div class="sep" style="margin:8px 0"></div>
+    <button class="btn" onclick="toggleHelp()">Cerrar</button>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
