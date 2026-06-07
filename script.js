@@ -69,6 +69,15 @@ let dragKF_origFrame = 0, dragKF_startX = 0;
 // Pan state
 let panning = false, panMX = 0, panMY = 0, panOX = 0, panOY = 0;
 
+// Timeline mode: 'scrub' or 'dragKF'
+let timelineMode = 'dragKF';
+let kfmDragging = false;
+function toggleTimelineMode() {
+  timelineMode = timelineMode === 'scrub' ? 'dragKF' : 'scrub';
+  document.getElementById('tl-mode').textContent = timelineMode === 'scrub' ? '✋ Navegar' : '☝ Arrastrar FC';
+  document.getElementById('tl-mode').className = 'btn small ' + (timelineMode === 'scrub' ? '' : 'accent');
+}
+
 // Copy buffer
 let copiedPose = null;
 
@@ -625,12 +634,23 @@ function updateTimeline(){
 // Timeline click scrub
 tlBar.addEventListener('mousedown',e=>{
   const target=e.target;
-  if(target.classList.contains('kfm')){
+  // Only drag keyframes when in dragKF mode; otherwise always scrub
+  if(timelineMode==='dragKF' && target.classList.contains('kfm')){
     // Draggable keyframe — won't call updateTimeline() during drag
     // so the target DOM element stays alive
     const frame=parseFloat(target.dataset.frame);
     curFrame=Math.round(frame);
-    updateTimeline(); draw();
+    // Manual visual update — no DOM rebuild, so target stays alive
+    const animStart=animations[curAnim];
+    const lenStart=animStart.length_frames;
+    const pctStart=(curFrame/lenStart)*100;
+    document.getElementById('tl-prog').style.width=pctStart+'%';
+    document.getElementById('tl-head').style.left=pctStart+'%';
+    document.getElementById('frame-disp').textContent='FC: '+Math.round(curFrame)+' / '+lenStart;
+    document.querySelectorAll('#tl-kfs .kfm').forEach(el=>el.classList.remove('sel'));
+    target.classList.add('sel');
+    draw();
+    kfmDragging = true;
     const onMove=me=>{
       const r=tlBar.getBoundingClientRect();
       let t=Math.max(0,Math.min(1,(me.clientX-r.left)/r.width));
@@ -662,7 +682,7 @@ tlBar.addEventListener('mousedown',e=>{
     const onUp=()=>{
       document.removeEventListener('mousemove',onMove);
       document.removeEventListener('mouseup',onUp);
-      target.classList.remove('dragging');
+      target.classList.remove('dragging'); kfmDragging = false;
       updateTimeline(); // rebuild DOM cleanly once at the end
       saveUndo();
     };
@@ -672,7 +692,7 @@ tlBar.addEventListener('mousedown',e=>{
   }
   scrub(e);
 });
-tlBar.addEventListener('mousemove',e=>{if(e.buttons===1&&!e.target.classList.contains('kfm'))scrub(e);});
+tlBar.addEventListener('mousemove',e=>{if(e.buttons===1&&!kfmDragging)scrub(e);});
 function scrub(e){
   const r=tlBar.getBoundingClientRect();
   const t=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
@@ -863,6 +883,7 @@ document.addEventListener('keydown',e=>{
     if(e.key==='ArrowUp'){setBoneKF(selBone,(p.angle??0)-1);updateInspector();draw();}
     if(e.key==='ArrowDown'){setBoneKF(selBone,(p.angle??0)+1);updateInspector();draw();}
   }
+  if(e.key==='m'||e.key==='M'){toggleTimelineMode();}
   if(e.key==='?'){e.preventDefault();toggleHelp();}
   if(e.key==='Tab'){ // Tab switch between tabs
     e.preventDefault();
